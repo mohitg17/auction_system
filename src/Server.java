@@ -7,49 +7,93 @@
  * This code does not compile.
  */
 
-
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Observable;
+import java.util.Scanner;
+import javafx.application.Platform;
 
 public class Server extends Observable {
-
+	
     static Server server;
+    ArrayList<Item> items = new ArrayList<Item>();
+//	private ArrayList<PrintWriter> clientOutputStreams;
+
 
     public static void main (String [] args) {
         server = new Server();
         server.populateItems();
-        server.SetupNetworking();
-    }
-
-    private void SetupNetworking() {
-        int port = 5000;
         try {
-            ServerSocket ss = new ServerSocket(port);
-            while (true) {
-                Socket clientSocket = ss.accept();
-                ClientObserver writer = new ClientObserver(clientSocket.getOutputStream());
-                Thread t = new Thread(new ClientHandler(clientSocket, writer));
-                t.start();
-                addObserver(writer);
-                System.out.println("got a connection");
-            }
-        } catch (IOException e) {}
+			server.setUpNetworking();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
     }
+    
+    public void populateItems() {
+    	File f = new File("src/items.txt");
+    	Scanner sc = null;
+    	try {
+			sc = new Scanner(f);
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+    	while(sc.hasNextLine()) {
+    		items.add(new Item(sc.nextLine().split(",")));
+    	}
+    }
+    
+    public void setUpNetworking() throws Exception {
+//    	clientOutputStreams = new ArrayList<PrintWriter>();
+		new Thread( () -> { 
+			try {  // Create a server socket 
+				@SuppressWarnings("resource")
+				ServerSocket serverSocket = new ServerSocket(8000);
+				while (true) { 
+					Socket socket = serverSocket.accept();
+					System.out.println("got a connection");
+					new Thread(new ClientHandler(socket)).start();
+//					new Thread(() -> {
+//						System.out.println("got a connection");
+//						new Thread(new ClientHandler(socket)).start();
+//					}).start();
+				}
+			}
+			catch(IOException ex) { 
+				System.err.println(ex);
+			}
+		}).start();
+    }
+	
+	class ClientHandler implements Runnable {
+		private Socket socket;
 
-    class ClientHandler implements Runnable {
-        private  ObjectInputStream reader;
-        private  ClientObserver writer; // See Canvas. Extends ObjectOutputStream, implements Observer
-        Socket clientSocket;
+		public ClientHandler(Socket socket) {
+			this.socket = socket;
+		}
 
-        public ClientHandler(Socket clientSocket, ClientObserver writer) {
-			//...
-        }
-
-        public void run() {
-			//...
-        }
-    } // end of class ClientHandler
+		public void run() {
+			try {
+				DataInputStream inputFromClient = new DataInputStream(socket.getInputStream());
+				DataOutputStream outputToClient = new DataOutputStream(socket.getOutputStream());
+				while(true) {
+					String message = inputFromClient.readUTF();
+					System.out.println("read " + message);
+					outputToClient.writeChars("received");
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
 }
