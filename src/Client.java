@@ -1,17 +1,23 @@
 /*
- * Author: Vallath Nandakumar and EE 422C instructors
- * Date: April 20, 2020
- * This starter code is from the MultiThreadChat example from the lecture, and is on Canvas. 
- * It doesn't compile.
+ * EE422C Final Project submission by
+ * Replace <...> with your actual data.
+ * Mohit Gupta
+ * mg58629
+ * 16295
+ * Spring 2020
  */
-
-
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
 import java.net.Socket;
+
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
 
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -26,62 +32,70 @@ import javafx.stage.Stage;
 
 public class Client extends Application { 
 	// I/O streams 
-	DataOutputStream toServer = null; 
-	DataInputStream fromServer = null;
+	private TextArea incoming;
+	private TextField outgoing;
+	private BufferedReader reader;
+	private PrintWriter writer;
 
 	@Override
 	public void start(Stage primaryStage) { 
+		// outgoing
 		BorderPane paneForTextField = new BorderPane(); 
-		paneForTextField.setPadding(new Insets(5, 5, 5, 5)); 
+		paneForTextField.setPadding(new Insets(10, 10, 10, 10)); 
 		paneForTextField.setStyle("-fx-border-color: green"); 
-		paneForTextField.setLeft(new Label("Enter a radius: ")); 
-
-		TextField tf = new TextField(); 
-		tf.setAlignment(Pos.BOTTOM_RIGHT); 
-		paneForTextField.setCenter(tf); 
-
-		BorderPane mainPane = new BorderPane(); 
-		// Text area to display contents 
-		TextArea ta = new TextArea(); 
-		mainPane.setCenter(new ScrollPane(ta)); 
+		paneForTextField.setLeft(new Label("Enter a bid: ")); 
+		outgoing = new TextField(); 
+		outgoing.setAlignment(Pos.BOTTOM_RIGHT); 
+		paneForTextField.setCenter(outgoing); 
+		
+		// incoming
+		BorderPane mainPane = new BorderPane();
+		incoming = new TextArea(); 
+		incoming.setPrefSize( 600, 600);
+		mainPane.setCenter(new ScrollPane(incoming)); 
 		mainPane.setTop(paneForTextField); 
 
-
-		// Create a scene and place it in the stage 
-		Scene scene = new Scene(mainPane, 450, 200); 
+		Scene scene = new Scene(mainPane, 600, 600); 
 		primaryStage.setTitle("Client"); // Set the stage title 
 		primaryStage.setScene(scene); // Place the scene in the stage 
 		primaryStage.show(); // Display the stage 
 
-		tf.setOnAction(e -> { 
-			try { 
-				// Get the radius from the text field 
-				String message = tf.getText().trim(); 
-
-				// Send the radius to the server 
-				toServer.writeChars(message); 
-				toServer.flush(); 
-
-//				// Get area from the server 
-//				String response = fromServer.readUTF(); 
-//
-//				// Display to the text area 
-//				ta.appendText("Response is " + response + "\n");
-
-			} 
-			catch (IOException ex) { 
-				System.err.println(ex); 
-			} 
-		}); 
-
-		try { 
-			@SuppressWarnings("resource")
-			Socket socket = new Socket("localhost", 8000); 
-			fromServer = new DataInputStream(socket.getInputStream()); 
-			toServer = new DataOutputStream(socket.getOutputStream()); 
-		} 
-		catch (IOException ex) { 
-			ta.appendText(ex.toString() + '\n');
+		outgoing.setOnAction(e -> {
+				writer.println(outgoing.getText());
+				writer.flush();
+				outgoing.setText("");
+				outgoing.requestFocus();
+		});
+		
+		try {
+			setUpNetworking();
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+	}
+	
+	private void setUpNetworking() throws Exception {
+		@SuppressWarnings("resource")
+		Socket sock = new Socket("localhost", 8000);
+		InputStreamReader streamReader = new InputStreamReader(sock.getInputStream());
+		reader = new BufferedReader(streamReader);
+		writer = new PrintWriter(sock.getOutputStream());
+		System.out.println("networking established");
+		Thread readerThread = new Thread(new Reader());
+		readerThread.start();
+	}
+	
+	class Reader implements Runnable {
+		@Override
+		public void run() {
+			String message;
+			try {
+				while ((message = reader.readLine()) != null) {
+					incoming.appendText(message + "\n");
+				}
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			}
 		}
 	}
 	

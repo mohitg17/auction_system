@@ -1,37 +1,33 @@
 /*
- * Author: Vallath Nandakumar and the EE 422C instructors.
- * Data: April 20, 2020
- * This starter code assumes that you are using an Observer Design Pattern and the appropriate Java library
- * classes.  Also using Message objects instead of Strings for socket communication.
- * See the starter code for the Chat Program on Canvas.  
- * This code does not compile.
+ * EE422C Final Project submission by
+ * Replace <...> with your actual data.
+ * Mohit Gupta
+ * mg58629
+ * 16295
+ * Spring 2020
  */
-
 import java.io.BufferedReader;
+import org.json.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.ObjectInputStream;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Observable;
+import java.util.Observer;
 import java.util.Scanner;
-import javafx.application.Platform;
 
 public class Server extends Observable {
 	
-    static Server server;
     ArrayList<Item> items = new ArrayList<Item>();
-//	private ArrayList<PrintWriter> clientOutputStreams;
-
 
     public static void main (String [] args) {
-        server = new Server();
+        Server server = new Server();
         server.populateItems();
         try {
 			server.setUpNetworking();
@@ -54,46 +50,96 @@ public class Server extends Observable {
     }
     
     public void setUpNetworking() throws Exception {
-//    	clientOutputStreams = new ArrayList<PrintWriter>();
-		new Thread( () -> { 
-			try {  // Create a server socket 
-				@SuppressWarnings("resource")
-				ServerSocket serverSocket = new ServerSocket(8000);
-				while (true) { 
-					Socket socket = serverSocket.accept();
-					System.out.println("got a connection");
-					new Thread(new ClientHandler(socket)).start();
-//					new Thread(() -> {
-//						System.out.println("got a connection");
-//						new Thread(new ClientHandler(socket)).start();
-//					}).start();
-				}
-			}
-			catch(IOException ex) { 
-				System.err.println(ex);
-			}
-		}).start();
+		@SuppressWarnings("resource")
+		ServerSocket serverSocket = new ServerSocket(8000);
+		while (true) { 
+			Socket socket = serverSocket.accept();
+			System.out.println("got a connection");
+			ClientHandler handler = new ClientHandler(this, socket);
+			handler.displayItems(items);
+			this.addObserver(handler);
+			new Thread(handler).start();
+		}
     }
-	
-	class ClientHandler implements Runnable {
+    
+    public void processRequest (String message) {
+    	String output = "invalid input\n";
+    	String[] inputs = message.split(",");
+    	if(inputs.length == 2) {
+    		for(Item i : items) {
+    			if(i.getName().equals(inputs[0])) {
+    				Item selected = i;
+    				if(i.getCurrentBid() < Integer.parseInt(inputs[1])) {
+	    				i.setCurrentBid(Integer.parseInt(inputs[1]));
+	    				output = "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid() + "\n";
+    				}
+    				else {
+    					output = "invalid bid amount. Current bid for item is higher than your bid";
+    				}
+    			}
+    		}
+    	}
+		for(Item j : items) {
+			output += j.toString();
+		}
+    	try {
+    		this.setChanged();
+    		this.notifyObservers(output);
+    	}
+    	catch(Exception e) {
+    		e.printStackTrace();
+    	}
+    }
+    
+	class ClientHandler implements Runnable, Observer {
+		private Server server;
 		private Socket socket;
-
-		public ClientHandler(Socket socket) {
+		private BufferedReader reader;
+		private PrintWriter writer;
+		
+		public ClientHandler(Server server, Socket socket) {
+			this.server = server;
 			this.socket = socket;
+			try {
+				reader = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
+				writer = new PrintWriter(this.socket.getOutputStream()); 
+			}
+			catch(IOException e) {
+				e.printStackTrace();
+			}
 		}
 
+		public void displayItems(ArrayList<Item> list) {
+			String output = "";
+			for(Item i : list) {
+				output += i;
+			}
+			writer.print(output);
+			writer.flush();
+		}
+		
+		private void notifyClient(String message) {
+			System.out.println("send message " + message);
+			writer.println(message);
+			writer.flush();
+		}
+		
+		@Override
 		public void run() {
+			String message;
 			try {
-				DataInputStream inputFromClient = new DataInputStream(socket.getInputStream());
-				DataOutputStream outputToClient = new DataOutputStream(socket.getOutputStream());
-				while(true) {
-					String message = inputFromClient.readUTF();
+				while((message = reader.readLine()) != null) {
 					System.out.println("read " + message);
-					outputToClient.writeChars("received");
+					server.processRequest(message);
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
+		}
+		
+		@Override
+		public void update(Observable o, Object arg) {
+			this.notifyClient((String) arg);
 		}
 	}
 }
