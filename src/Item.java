@@ -37,7 +37,7 @@ public class Item {
 
 	@Override
 	public String toString() {
-		return "Item Name: " + name + "\nItem Description: " + description + "\nMin Cost: " + minCost + "\nCurrent Bid: " + currentBid + "\nEnd Time: " + endTime + "\n\n";
+		return "Item Name: " + name + "\nItem Description: " + description + "\nMin Cost: " + minCost + "\nCurrent Bid: " + currentBid + "\nEnd Time: " + endTime + " seconds\n\n";
 	}
 	
 }

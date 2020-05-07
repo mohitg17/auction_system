@@ -21,10 +21,16 @@ import java.util.ArrayList;
 import java.util.Observable;
 import java.util.Observer;
 import java.util.Scanner;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class Server extends Observable {
 	
     ArrayList<Item> items = new ArrayList<Item>();
+    ArrayList<String> last_bidder = new ArrayList<String>();
+    ArrayList<ArrayList<String>> bids = new ArrayList<ArrayList<String>>();
+    static int client_number = 1;
+    static boolean over = false;
 
     public static void main (String [] args) {
         Server server = new Server();
@@ -47,6 +53,9 @@ public class Server extends Observable {
     	while(sc.hasNextLine()) {
     		items.add(new Item(sc.nextLine().split(",")));
     	}
+    	for(int i = 0; i < items.size(); i++) {
+    		last_bidder.add(null);
+    	}
     }
     
     public void setUpNetworking() throws Exception {
@@ -59,10 +68,17 @@ public class Server extends Observable {
 			handler.displayItems(items);
 			this.addObserver(handler);
 			new Thread(handler).start();
+			Timer timer = new Timer();
+			timer.schedule(new TimerTask() {
+				  @Override
+				  public void run() {
+				    endAuction();
+				  }
+				}, 30000);
 		}
     }
     
-    public void processRequest (String message) {
+    public void processRequest (ClientHandler client, String message) {
     	String output = "invalid input\n";
     	String[] inputs = message.split(",");
     	if(inputs.length == 2) {
@@ -72,9 +88,11 @@ public class Server extends Observable {
     				if(i.getCurrentBid() < Integer.parseInt(inputs[1])) {
 	    				i.setCurrentBid(Integer.parseInt(inputs[1]));
 	    				output = "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid() + "\n";
+	    				last_bidder.set(items.indexOf(i), client.name);
+	    				bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid " + i.getCurrentBid() + " on: " + i.getName());
     				}
     				else {
-    					output = "invalid bid amount. Current bid for item is higher than your bid";
+    					output = "invalid bid amount. Current bid for item is higher than your bid\n";
     				}
     			}
     		}
@@ -91,13 +109,36 @@ public class Server extends Observable {
     	}
     }
     
+    public void endAuction() {
+    	String output = "The auction has ended. Winners are listed below:\n";
+    	for(Item i : items) {
+    		if(last_bidder.get(items.indexOf(i)) == null) {
+    			output += i.getName() + ": there were no bids for this item\n";
+    		}
+    		else {
+    			output += i.getName() + ": " + last_bidder.get(items.indexOf(i)) + " won this item\n";
+    		}
+    	}
+    	try {
+    		this.setChanged();
+    		this.notifyObservers(output);
+    	}
+    	catch(Exception e) {
+    		e.printStackTrace();
+    	}
+    	over = true;
+    }
+    
 	class ClientHandler implements Runnable, Observer {
 		private Server server;
 		private Socket socket;
 		private BufferedReader reader;
 		private PrintWriter writer;
+		private String name;
 		
 		public ClientHandler(Server server, Socket socket) {
+			name = "Client" + client_number;
+			client_number++;
 			this.server = server;
 			this.socket = socket;
 			try {
@@ -129,8 +170,13 @@ public class Server extends Observable {
 			String message;
 			try {
 				while((message = reader.readLine()) != null) {
-					System.out.println("read " + message);
-					server.processRequest(message);
+					if(!over) {
+						System.out.println("read " + message);
+						server.processRequest(this, message);
+					}
+					else {
+						server.processRequest(this, "This item is no longer accepting bids");
+					}
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
