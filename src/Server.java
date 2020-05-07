@@ -65,7 +65,7 @@ public class Server extends Observable {
 			Socket socket = serverSocket.accept();
 			System.out.println("got a connection");
 			ClientHandler handler = new ClientHandler(this, socket);
-			bids.add(new ArrayList<String>());
+//			bids.add(new ArrayList<String>());
 			handler.displayItems(items);
 			this.addObserver(handler);
 			new Thread(handler).start();
@@ -75,7 +75,7 @@ public class Server extends Observable {
 				  public void run() {
 				    endAuction();
 				  }
-				}, 30000);
+				}, 60000);
 		}
     }
     
@@ -89,7 +89,7 @@ public class Server extends Observable {
 	    				i.setCurrentBid(Integer.parseInt(inputs[1]));
 	    				output = "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid() + "\n";
 	    				last_bidder.set(items.indexOf(i), client.name);
-	    				bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid " + i.getCurrentBid() + " on: " + i.getName());
+//	    				bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid " + i.getCurrentBid() + " on: " + i.getName());
     				}
     				else {
     					output = "invalid bid amount. Current bid for item is higher than your bid\n";
@@ -170,14 +170,13 @@ public class Server extends Observable {
 			String message;
 			try {
 				while((message = reader.readLine()) != null) {
-					synchronized(lock) {
-						if(!over) {
-							System.out.println("read " + message);
-							server.processRequest(this, message);
-						}
-						else {
-							server.processRequest(this, "This item is no longer accepting bids");
-						}
+					// need to synchronize
+					if(!over) {
+						System.out.println("read " + message);
+						server.processRequest(this, message);
+					}
+					else {
+						server.processRequest(this, "This item is no longer accepting bids");
 					}
 				}
 			} catch (IOException e) {

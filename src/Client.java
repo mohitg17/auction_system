@@ -20,6 +20,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -41,6 +42,7 @@ public class Client extends Application {
 	private BufferedReader reader;
 	private PrintWriter writer;
 	private Button submit;
+	private Button quit;
 		
 	@Override
 	public void start(Stage primaryStage) {
@@ -86,7 +88,10 @@ public class Client extends Application {
 			incoming = new TextArea(); 
 			incoming.setPrefSize( 600, 600);
 			mainPane.setCenter(new ScrollPane(incoming)); 
-			mainPane.setTop(paneForTextField); 
+			mainPane.setTop(paneForTextField);
+			
+			quit = new Button("Quit");
+			mainPane.setBottom(quit);
 			
 			ComboBox dropdown = new ComboBox();
 			dropdown.getItems().add("Choice 1");
@@ -139,7 +144,11 @@ public class Client extends Application {
 			String message;
 			try {
 				while ((message = reader.readLine()) != null) {
-					incoming.appendText(message + "\n");
+//					incoming.appendText(message + "\n");
+					String tmp = message;
+					Platform.runLater(() -> {
+						incoming.appendText(tmp + "\n");
+					});
 				}
 			} catch (IOException ex) {
 				ex.printStackTrace();
