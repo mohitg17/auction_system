@@ -125,6 +125,14 @@ public class Client extends Application {
 		readerThread.start();
 	}
 	
+	private void processRequest(String message) {
+		String[] arr = message.split("\n", 2);
+		switch(arr[0]) {
+		case "items":
+			break;
+		}
+	}
+	
 	class Reader implements Runnable {
 		@Override
 		public void run() {

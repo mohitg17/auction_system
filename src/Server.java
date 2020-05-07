@@ -7,7 +7,6 @@
  * Spring 2020
  */
 import java.io.BufferedReader;
-import org.json.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -29,8 +28,9 @@ public class Server extends Observable {
     ArrayList<Item> items = new ArrayList<Item>();
     ArrayList<String> last_bidder = new ArrayList<String>();
     ArrayList<ArrayList<String>> bids = new ArrayList<ArrayList<String>>();
-    static int client_number = 1;
+    static int client_number = 0;
     static boolean over = false;
+    Object lock = new Object();
 
     public static void main (String [] args) {
         Server server = new Server();
@@ -65,6 +65,7 @@ public class Server extends Observable {
 			Socket socket = serverSocket.accept();
 			System.out.println("got a connection");
 			ClientHandler handler = new ClientHandler(this, socket);
+			bids.add(new ArrayList<String>());
 			handler.displayItems(items);
 			this.addObserver(handler);
 			new Thread(handler).start();
@@ -84,7 +85,6 @@ public class Server extends Observable {
     	if(inputs.length == 2) {
     		for(Item i : items) {
     			if(i.getName().equals(inputs[0])) {
-    				Item selected = i;
     				if(i.getCurrentBid() < Integer.parseInt(inputs[1])) {
 	    				i.setCurrentBid(Integer.parseInt(inputs[1]));
 	    				output = "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid() + "\n";
@@ -170,12 +170,14 @@ public class Server extends Observable {
 			String message;
 			try {
 				while((message = reader.readLine()) != null) {
-					if(!over) {
-						System.out.println("read " + message);
-						server.processRequest(this, message);
-					}
-					else {
-						server.processRequest(this, "This item is no longer accepting bids");
+					synchronized(lock) {
+						if(!over) {
+							System.out.println("read " + message);
+							server.processRequest(this, message);
+						}
+						else {
+							server.processRequest(this, "This item is no longer accepting bids");
+						}
 					}
 				}
 			} catch (IOException e) {
