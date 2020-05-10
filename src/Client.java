@@ -7,17 +7,11 @@
  * Spring 2020
  */
 import java.io.BufferedReader;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
-
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
+import com.google.gson.*;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -31,6 +25,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
@@ -39,17 +34,22 @@ public class Client extends Application {
 	// I/O streams 
 	private TextArea incoming;
 	private TextField outgoing;
+	private TextField username;
+	private TextField password;
 	private BufferedReader reader;
 	private PrintWriter writer;
 	private Button submit;
+	private Button send;
+	private Button history;
 	private Button quit;
+	private ComboBox dropdown;
 		
 	@Override
 	public void start(Stage primaryStage) {
 		Text text1 = new Text("Username");   
 		Text text2 = new Text("Password"); 
-		TextField username = new TextField();         
-		TextField password = new TextField();  
+		username = new TextField();         
+		password = new TextField();  
 
 		Button submit = new Button("Submit");
 
@@ -72,31 +72,63 @@ public class Client extends Application {
 		primaryStage.show(); // Display the stage
 		
 		submit.setOnAction(d -> {
+			String usr = username.getText();
+			String pw = password.getText();
 			Stage stage = (Stage) submit.getScene().getWindow();
 		    stage.close();
+		    
 			// outgoing
 			BorderPane paneForTextField = new BorderPane(); 
 			paneForTextField.setPadding(new Insets(10, 10, 10, 10)); 
 			paneForTextField.setStyle("-fx-border-color: green"); 
 			paneForTextField.setLeft(new Label("Enter a bid: ")); 
-			outgoing = new TextField(); 
-			outgoing.setAlignment(Pos.BOTTOM_RIGHT); 
-			paneForTextField.setCenter(outgoing); 
+			outgoing = new TextField("Bid Amount");
+			outgoing.setAlignment(Pos.CENTER_RIGHT);
+//			outgoing.setAlignment(Pos.CENTER);
+			paneForTextField.setCenter(outgoing);
 
+			// control panel
+			GridPane paneForControls = new GridPane();
+		    ColumnConstraints column1 = new ColumnConstraints();
+		    column1.setPercentWidth(30);
+		    ColumnConstraints column2 = new ColumnConstraints();
+		    column2.setPercentWidth(30);
+		    ColumnConstraints column3 = new ColumnConstraints();
+		    column3.setPercentWidth(20);
+		    ColumnConstraints column4 = new ColumnConstraints();
+		    column4.setPercentWidth(20);
+		    paneForControls.getColumnConstraints().addAll(column1, column2, column3, column4);
+			paneForControls.setMinSize(600, 50);
+			paneForControls.setPadding(new Insets(10, 10, 10, 10));
+			paneForControls.setVgap(5); 
+			paneForControls.setHgap(5);
+			paneForControls.setAlignment(Pos.CENTER_LEFT);
+			
 			// incoming
 			BorderPane mainPane = new BorderPane();
 			incoming = new TextArea(); 
-			incoming.setPrefSize( 600, 600);
+			incoming.setPrefSize(600, 600);
 			mainPane.setCenter(new ScrollPane(incoming)); 
 			mainPane.setTop(paneForTextField);
 			
+			// items list and text field
+			dropdown = new ComboBox();
+			paneForControls.add(dropdown, 0, 0);
+			paneForControls.add(outgoing, 1, 0);
+			
+			// send and history button
+			send = new Button("Send");
+			send.setAlignment(Pos.CENTER);
+			paneForControls.add(send, 2, 0);
+			history = new Button("History");
+			history.setAlignment(Pos.CENTER);
+			paneForControls.add(history, 3, 0);
+			
+			// quit button
 			quit = new Button("Quit");
+			quit.setAlignment(Pos.CENTER_RIGHT);
 			mainPane.setBottom(quit);
 			
-			ComboBox dropdown = new ComboBox();
-			dropdown.getItems().add("Choice 1");
-			dropdown.getItems().add("Choice 2");
-			dropdown.getItems().add("Choice 3");
 
 			Stage secondStage = new Stage();
 			Scene scene2 = new Scene(mainPane, 600, 600); 
@@ -109,6 +141,22 @@ public class Client extends Application {
 				writer.flush();
 				outgoing.setText("");
 				outgoing.requestFocus();
+			});
+			
+			send.setOnAction(r -> {
+				if(!dropdown.getValue().equals("items")) {
+					Message message = new Message((String)dropdown.getValue(), outgoing.getText());
+					GsonBuilder builder = new GsonBuilder();
+					Gson gson = builder.create();
+					writer.println(gson.toJson(message));
+					writer.flush();
+					outgoing.setText("Bid Amount");
+					outgoing.requestFocus();
+				}
+			});
+			
+			quit.setOnAction(f -> {
+				secondStage.close();
 			});
 
 			try {
@@ -131,9 +179,20 @@ public class Client extends Application {
 	}
 	
 	private void processRequest(String message) {
-		String[] arr = message.split("\n", 2);
-		switch(arr[0]) {
+		Gson gson = new Gson();
+		Message msg = gson.fromJson(message, Message.class);
+		switch(msg.getType()) {
 		case "items":
+			String[] items = msg.getMessage().split("\n");
+			for(int i = 0; i < items.length; i++) {
+				dropdown.getItems().add(items[i]);
+			}
+			break;
+		case "update":
+			String tmp = msg.getMessage();
+			Platform.runLater(() -> {
+				incoming.appendText(tmp + "\n");
+			});
 			break;
 		}
 	}
@@ -144,7 +203,7 @@ public class Client extends Application {
 			String message;
 			try {
 				while ((message = reader.readLine()) != null) {
-//					incoming.appendText(message + "\n");
+//					processRequest(message);
 					String tmp = message;
 					Platform.runLater(() -> {
 						incoming.appendText(tmp + "\n");

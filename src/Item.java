@@ -5,6 +5,7 @@ public class Item {
 	private String description;
 	private int minCost;
 	private int currentBid;
+	private int buyNow;
 	private int endTime;
 	
 	public Item() {
@@ -16,6 +17,7 @@ public class Item {
 		description = s[1];
 		minCost = Integer.parseInt(s[2]);
 		currentBid = minCost;
+		buyNow = minCost*20;
 		endTime = Integer.parseInt(s[3]);
 	}
 	
@@ -34,10 +36,27 @@ public class Item {
 	public void setName(String name) {
 		this.name = name;
 	}
+	
+	public String getDescription() {
+		return description;
+	}
+
+	public void setDescription(String description) {
+		this.description = description;
+	}
+
+	public int getBuyNow() {
+		return buyNow;
+	}
+
+	public void setBuyNow(int buyNow) {
+		this.buyNow = buyNow;
+	}
 
 	@Override
 	public String toString() {
-		return "Item Name: " + name + "\nItem Description: " + description + "\nMin Cost: " + minCost + "\nCurrent Bid: " + currentBid + "\nEnd Time: " + endTime + " seconds\n\n";
+		return "Item Name: " + name + "\nItem Description: " + description + "\nMin Cost: " + minCost + 
+				"\nCurrent Bid: " + currentBid + "\nBuy now: " + buyNow + "\nEnd Time: " + endTime + " seconds\n\n";
 	}
 	
 }

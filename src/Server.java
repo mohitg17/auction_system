@@ -22,12 +22,15 @@ import java.util.Observer;
 import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
+import com.google.gson.*;
 
 public class Server extends Observable {
 	
     ArrayList<Item> items = new ArrayList<Item>();
     ArrayList<String> last_bidder = new ArrayList<String>();
     ArrayList<ArrayList<String>> bids = new ArrayList<ArrayList<String>>();
+    ArrayList<String> usernames = new ArrayList<String>();
+    ArrayList<String> passwords = new ArrayList<String>();
     static int client_number = 0;
     static boolean over = false;
     Object lock = new Object();
@@ -65,7 +68,8 @@ public class Server extends Observable {
 			Socket socket = serverSocket.accept();
 			System.out.println("got a connection");
 			ClientHandler handler = new ClientHandler(this, socket);
-//			bids.add(new ArrayList<String>());
+			bids.add(new ArrayList<String>());
+//			handler.sendItemList();
 			handler.displayItems(items);
 			this.addObserver(handler);
 			new Thread(handler).start();
@@ -82,23 +86,39 @@ public class Server extends Observable {
     public void processRequest (ClientHandler client, String message) {
     	String output = "invalid input\n";
     	String[] inputs = message.split(",");
-    	if(inputs.length == 2) {
+    	if(inputs[0].equals("username")) {
+    		usernames.add(inputs[1]);
+    		passwords.add(inputs[3]);
+    	}
+    	else if(inputs.length == 2) {
+    		output = "update\n";
     		for(Item i : items) {
     			if(i.getName().equals(inputs[0])) {
     				if(i.getCurrentBid() < Integer.parseInt(inputs[1])) {
-	    				i.setCurrentBid(Integer.parseInt(inputs[1]));
-	    				output = "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid() + "\n";
+    					if(Integer.parseInt(inputs[1]) == i.getBuyNow()) {
+    						output = i.getName() + " was sold to " + client.name + "\n\n";
+    						i.setCurrentBid(-1);
+    					}
+    					else {
+    						i.setCurrentBid(Integer.parseInt(inputs[1]));
+    						output += "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid() + "\n\n";
+    					}
 	    				last_bidder.set(items.indexOf(i), client.name);
-//	    				bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid " + i.getCurrentBid() + " on: " + i.getName());
+	    				bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid " + i.getCurrentBid() + " on: " + i.getName());
     				}
     				else {
-    					output = "invalid bid amount. Current bid for item is higher than your bid\n";
+    					output += "invalid bid amount. Current bid for item is higher than your bid\n";
     				}
     			}
     		}
     	}
 		for(Item j : items) {
-			output += j.toString();
+			if(j.getCurrentBid() == -1) {
+				output += j.getName() + " ***SOLD TO: " + client.name + " for $" + j.getBuyNow() + "\n\n";
+			}
+			else {
+				output += j.toString();
+			}
 		}
     	try {
     		this.setChanged();
@@ -110,7 +130,7 @@ public class Server extends Observable {
     }
     
     public void endAuction() {
-    	String output = "The auction has ended. Winners are listed below:\n";
+    	String output = "update\nThe auction has ended. Winners are listed below:\n";
     	for(Item i : items) {
     		if(last_bidder.get(items.indexOf(i)) == null) {
     			output += i.getName() + ": there were no bids for this item\n";
@@ -159,6 +179,15 @@ public class Server extends Observable {
 			writer.flush();
 		}
 		
+		public void sendItemList() {
+			String output = "items\n";
+			for(Item i : items) {
+				output += i.getName() + "\n";
+			}
+			writer.print(output);
+			writer.flush();
+		}
+		
 		private void notifyClient(String message) {
 			System.out.println("send message " + message);
 			writer.println(message);
@@ -170,13 +199,14 @@ public class Server extends Observable {
 			String message;
 			try {
 				while((message = reader.readLine()) != null) {
-					// need to synchronize
-					if(!over) {
-						System.out.println("read " + message);
-						server.processRequest(this, message);
-					}
-					else {
-						server.processRequest(this, "This item is no longer accepting bids");
+					synchronized(lock) {
+						if(!over) {
+							System.out.println("read " + message);
+							server.processRequest(this, message);
+						}
+						else {
+							server.processRequest(this, "This item is no longer accepting bids");
+						}
 					}
 				}
 			} catch (IOException e) {
