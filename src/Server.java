@@ -31,13 +31,27 @@ public class Server extends Observable {
     ArrayList<ArrayList<String>> bids = new ArrayList<ArrayList<String>>();
     ArrayList<String> usernames = new ArrayList<String>();
     ArrayList<String> passwords = new ArrayList<String>();
+    String previous_message = "";
+    boolean display_history = false;
+	GsonBuilder builder = new GsonBuilder();
+	Gson gson = builder.create();
     static int client_number = 0;
     static boolean over = false;
     Object lock = new Object();
+    Object lock2 = new Object();
+    long time = System.currentTimeMillis();
 
     public static void main (String [] args) {
         Server server = new Server();
         server.populateItems();
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				while(true) {
+					server.refresh();
+				}
+			}
+		}).start();
         try {
 			server.setUpNetworking();
 		} catch (Exception e) {
@@ -69,7 +83,7 @@ public class Server extends Observable {
 			System.out.println("got a connection");
 			ClientHandler handler = new ClientHandler(this, socket);
 			bids.add(new ArrayList<String>());
-//			handler.sendItemList();
+			handler.sendItemList();
 			handler.displayItems(items);
 			this.addObserver(handler);
 			new Thread(handler).start();
@@ -83,49 +97,82 @@ public class Server extends Observable {
 		}
     }
     
-    public void processRequest (ClientHandler client, String message) {
+    public void processRequest (ClientHandler client, Message message) {
     	String output = "invalid input\n";
-    	String[] inputs = message.split(",");
-    	if(inputs[0].equals("username")) {
-    		usernames.add(inputs[1]);
-    		passwords.add(inputs[3]);
-    	}
-    	else if(inputs.length == 2) {
-    		output = "update\n";
+    	Message out = new Message("notification", "invalid input");
+    	if(message.type.equals("bid")) {
     		for(Item i : items) {
-    			if(i.getName().equals(inputs[0])) {
-    				if(i.getCurrentBid() < Integer.parseInt(inputs[1])) {
-    					if(Integer.parseInt(inputs[1]) == i.getBuyNow()) {
-    						output = i.getName() + " was sold to " + client.name + "\n\n";
+    			if(i.getName().equals(message.bid_item)) {
+    				if(i.getCurrentBid() < message.amount) {
+    					if(message.amount == i.getBuyNow()) {
+    						output = i.getName() + " was sold to " + client.name;
     						i.setCurrentBid(-1);
     					}
     					else {
-    						i.setCurrentBid(Integer.parseInt(inputs[1]));
-    						output += "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid() + "\n\n";
+    						i.setCurrentBid(message.amount);
+    						output = "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid();
     					}
 	    				last_bidder.set(items.indexOf(i), client.name);
-	    				bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid " + i.getCurrentBid() + " on: " + i.getName());
+	    				bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid $" + message.amount + " on " + i.getName());
     				}
     				else {
-    					output += "invalid bid amount. Current bid for item is higher than your bid\n";
+    					output = "invalid bid amount. Current bid for item is higher than your bid";
     				}
     			}
     		}
+    		out = new Message("update", output, items);
+    		previous_message = output;
+        	try {
+        		this.setChanged();
+        		this.notifyObservers(gson.toJson(out));
+        	}
+        	catch(Exception e) {
+        		e.printStackTrace();
+        	}
     	}
-		for(Item j : items) {
-			if(j.getCurrentBid() == -1) {
-				output += j.getName() + " ***SOLD TO: " + client.name + " for $" + j.getBuyNow() + "\n\n";
-			}
-			else {
-				output += j.toString();
-			}
-		}
-    	try {
-    		this.setChanged();
-    		this.notifyObservers(output);
+    	else if(message.type.equals("history")) {
+    		output = "";
+    		for(int i = 0; i < bids.size(); i++) {
+    			output += "Client" + i + " bids:\n";
+    			for(int j = 0; j < bids.get(i).size(); j++) {
+    				output += bids.get(i).get(j) + "\n";
+    			}
+    			output += "\n";
+    		}
+    		display_history = true;
+    		out = new Message("notification", output);
+    		client.writer.println(gson.toJson(out));
+    		client.writer.flush();
     	}
-    	catch(Exception e) {
-    		e.printStackTrace();
+    	else if(message.type.equals("username")) {
+    		usernames.add(message.message);
+    	}
+    	else if(message.type.equals("password")) {
+    		passwords.add(message.message);
+    	}
+    	else if(message.type.equals("refresh")) {
+    		display_history = false;
+    		client.displayItems(items);
+    	}
+    	else {
+    		client.writer.println(gson.toJson(out));
+    		client.writer.flush();
+    	}
+    }
+    
+    public void refresh() {
+    	synchronized(lock) {
+    		if(System.currentTimeMillis() - time >= 1000) {
+    			time = System.currentTimeMillis();
+    			for(Item i : items) {
+    				i.setRemainingTime(i.getRemainingTime()-1);
+    			}
+    			if(!display_history) {
+	    			Message msg = new Message("update", previous_message, items);
+	        		this.setChanged();
+	        		this.notifyObservers(gson.toJson(msg));
+    			}
+    		}
     	}
     }
     
@@ -139,9 +186,10 @@ public class Server extends Observable {
     			output += i.getName() + ": " + last_bidder.get(items.indexOf(i)) + " won this item\n";
     		}
     	}
+    	Message msg = new Message("notification", output, items);
     	try {
     		this.setChanged();
-    		this.notifyObservers(output);
+    		this.notifyObservers(gson.toJson(msg));
     	}
     	catch(Exception e) {
     		e.printStackTrace();
@@ -171,25 +219,20 @@ public class Server extends Observable {
 		}
 
 		public void displayItems(ArrayList<Item> list) {
-			String output = "";
-			for(Item i : list) {
-				output += i;
-			}
-			writer.print(output);
+			Message msg = new Message("update", "", list);
+			writer.println(gson.toJson(msg));
 			writer.flush();
 		}
 		
 		public void sendItemList() {
-			String output = "items\n";
-			for(Item i : items) {
-				output += i.getName() + "\n";
-			}
-			writer.print(output);
+			String output = "";
+			Message message = new Message("items", "", items);
+			writer.println(gson.toJson(message));
 			writer.flush();
 		}
 		
 		private void notifyClient(String message) {
-			System.out.println("send message " + message);
+//			System.out.println("send message " + message);
 			writer.println(message);
 			writer.flush();
 		}
@@ -201,11 +244,12 @@ public class Server extends Observable {
 				while((message = reader.readLine()) != null) {
 					synchronized(lock) {
 						if(!over) {
-							System.out.println("read " + message);
-							server.processRequest(this, message);
+//							System.out.println("read " + message);
+							Message msg = gson.fromJson(message, Message.class);
+							server.processRequest(this, msg);
 						}
 						else {
-							server.processRequest(this, "This item is no longer accepting bids");
+							server.processRequest(this, null);
 						}
 					}
 				}

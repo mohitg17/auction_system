@@ -6,7 +6,7 @@ public class Item {
 	private int minCost;
 	private int currentBid;
 	private int buyNow;
-	private int endTime;
+	private int remainingTime;
 	
 	public Item() {
 		
@@ -18,7 +18,7 @@ public class Item {
 		minCost = Integer.parseInt(s[2]);
 		currentBid = minCost;
 		buyNow = minCost*20;
-		endTime = Integer.parseInt(s[3]);
+		remainingTime = Integer.parseInt(s[3]);
 	}
 	
 	public int getCurrentBid() {
@@ -53,10 +53,21 @@ public class Item {
 		this.buyNow = buyNow;
 	}
 
+	public int getRemainingTime() {
+		return remainingTime;
+	}
+
+	public void setRemainingTime(int remainingTime) {
+		this.remainingTime = remainingTime;
+	}
+
 	@Override
 	public String toString() {
+		if(currentBid == -1) {
+			return "Item Name: " + name + " [SOLD]\n\n";
+		}
 		return "Item Name: " + name + "\nItem Description: " + description + "\nMin Cost: " + minCost + 
-				"\nCurrent Bid: " + currentBid + "\nBuy now: " + buyNow + "\nEnd Time: " + endTime + " seconds\n\n";
+				"\nCurrent Bid: " + currentBid + "\nBuy now: " + buyNow + "\nEnd Time: " + remainingTime + " seconds\n\n";
 	}
 	
 }
