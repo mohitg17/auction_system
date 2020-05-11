@@ -13,7 +13,6 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import com.google.gson.*;
-
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.HPos;
@@ -30,8 +29,6 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
-import javafx.scene.media.Media;
-import javafx.scene.media.MediaPlayer;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
@@ -91,7 +88,7 @@ public class Client extends Application {
 			    writer.println(gson.toJson(msg));
 			    writer.flush();
 			    try {
-					Thread.sleep(250);
+					Thread.sleep(500);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -265,13 +262,6 @@ public class Client extends Application {
 				incoming.appendText(out + "\n");
 			});
 		}
-	}
-	
-	private void click() {
-		String music = System.getProperty("user.dir") + "/src/click.m4a";
-		Media sound = new Media(new File(music).toURI().toString());
-		MediaPlayer mediaPlayer = new MediaPlayer(sound);
-		mediaPlayer.setAutoPlay(true);;
 	}
 	
 	class Reader implements Runnable {

@@ -24,6 +24,7 @@ import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
 import com.google.gson.*;
+import org.jasypt.util.password.StrongPasswordEncryptor;
 
 public class Server extends Observable {
 	
@@ -33,14 +34,17 @@ public class Server extends Observable {
     ArrayList<String> usernames = new ArrayList<String>();
     ArrayList<String> passwords = new ArrayList<String>();
     String previous_message = "";
+    String history = "";
     boolean display_history = false;
 	GsonBuilder builder = new GsonBuilder();
 	Gson gson = builder.create();
+	StrongPasswordEncryptor passwordEncryptor = new StrongPasswordEncryptor();
     static int client_number = 0;
     static boolean over = false;
     Object lock = new Object();
     Object lock2 = new Object();
     long time = System.currentTimeMillis();
+    int max_time = 0;
 
     public static void main (String [] args) {
         Server server = new Server();
@@ -66,12 +70,25 @@ public class Server extends Observable {
     	for(int i = 0; i < items.size(); i++) {
     		last_bidder.add(null);
     	}
+    	for(Item i : items) {
+    		if(i.getRemainingTime() > max_time) {
+    			max_time = i.getRemainingTime();
+    		}
+    	}
+    	try {
+	        File file = new File("history.txt");
+	        Scanner scan = new Scanner(file);
+	        while (scan.hasNextLine()) {
+	          history += scan.nextLine() + "\n";
+	        }
+	        scan.close();
+    	}
+    	catch (IOException e) {
+    		e.printStackTrace();
+    	}
     }
     
     public void setUpNetworking() throws Exception {
-//        if(new File("history.json").isFile()) {
-//        	bids.set(0, gson.fromJson("history.json", ArrayList.class));
-//        }
 		@SuppressWarnings("resource")
 		ServerSocket serverSocket = new ServerSocket(8000);
 		new Thread(new Runnable() {
@@ -95,7 +112,7 @@ public class Server extends Observable {
 				  public void run() {
 				    endAuction();
 				  }
-				}, 60000);
+				}, max_time*1000);
 		}
     }
     
@@ -105,20 +122,26 @@ public class Server extends Observable {
     	if(message.type.equals("bid")) {
     		for(Item i : items) {
     			if(i.getName().equals(message.bid_item)) {
-    				if(i.getCurrentBid() < message.amount) {
-    					if(message.amount == i.getBuyNow()) {
-    						output = i.getName() + " was sold to " + client.name;
-    						i.setCurrentBid(-1);
+    				if(!(i.getRemainingTime() <= 0)) {
+    					if(i.getCurrentBid() < message.amount) {
+    						if(message.amount == i.getBuyNow()) {
+    							output = client.name + " purchased " + i.getName() + " for $" + message.amount;
+        						bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("purchased " + i.getName() + " for $" + message.amount);
+    							i.setCurrentBid(-1);
+    						}
+    						else {
+    							i.setCurrentBid(message.amount);
+    							output = "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid();
+        						bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid $" + message.amount + " on " + i.getName());
+    						}
+    						last_bidder.set(items.indexOf(i), client.name);
     					}
     					else {
-    						i.setCurrentBid(message.amount);
-    						output = "Bid for " + i.getName() + " was processed. Current bid is now " + i.getCurrentBid();
+    						output = "invalid bid amount. Current bid for item is higher than your bid";
     					}
-	    				last_bidder.set(items.indexOf(i), client.name);
-	    				bids.get(Integer.parseInt(client.name.substring(client.name.length()-1))).add("Bid $" + message.amount + " on " + i.getName());
     				}
     				else {
-    					output = "invalid bid amount. Current bid for item is higher than your bid";
+    					output = "Auction for " + message.bid_item + " is over.";
     				}
     			}
     		}
@@ -141,6 +164,7 @@ public class Server extends Observable {
     			}
     			output += "\n";
     		}
+    		output += "\n" + history;
     		display_history = true;
     		out = new Message("notification", output);
     		client.writer.println(gson.toJson(out));
@@ -149,7 +173,7 @@ public class Server extends Observable {
     	else if(message.type.equals("credentials")) {
     		String status = "";
     		if(usernames.contains(message.username)) {
-    			if(passwords.get(usernames.indexOf(message.username)).equals(message.password)) {
+    			if(passwordEncryptor.checkPassword(message.password, passwords.get(usernames.indexOf(message.username)))) {
 	    			int client_num = usernames.indexOf(message.username);
 	    			client.name = "Client" + client_num;
 	    			bids.remove(bids.size()-1);
@@ -162,7 +186,8 @@ public class Server extends Observable {
     		}
     		else {
     			usernames.add(message.username);
-    			passwords.add(message.password);
+    			String encryptedPassword = passwordEncryptor.encryptPassword(message.password);
+    			passwords.add(encryptedPassword);
     			status = "success";
     		}
     		out = new Message("verification", status);
@@ -172,6 +197,7 @@ public class Server extends Observable {
 			client.displayItems(items);
     	}
     	else if(message.type.equals("refresh")) {
+    		display_history = false;
     		Message msg = new Message("update", previous_message, items);
     		client.writer.println(gson.toJson(msg));
     		client.writer.flush();
@@ -235,16 +261,22 @@ public class Server extends Observable {
     	}
     	over = true;
         try {
-            File f = new File("history.json");
+            File f = new File("history.txt");
             if (f.createNewFile()) {
               System.out.println("File created: " + f.getName());
             } else {
               System.out.println("File already exists.");
             }
-            FileWriter writer = new FileWriter("history.json");
-            for(ArrayList<String> s : bids) {
-            	gson.toJson(s, writer);
-            }
+            FileWriter writer = new FileWriter("history.txt", true);
+    		output = "*****AUCTION HISTORY*****\n\n" + output + "\n";
+    		for(int i = 0; i < bids.size(); i++) {
+    			output += "Client" + i + " bids:\n";
+    			for(int j = 0; j < bids.get(i).size(); j++) {
+    				output += bids.get(i).get(j) + "\n";
+    			}
+    			output += "\n";
+    		}
+    		writer.write(output);
             writer.close();
          } 
         catch (IOException e) {
