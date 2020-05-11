@@ -11,6 +11,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -44,14 +45,6 @@ public class Server extends Observable {
     public static void main (String [] args) {
         Server server = new Server();
         server.populateItems();
-		new Thread(new Runnable() {
-			@Override
-			public void run() {
-				while(true) {
-					server.refresh();
-				}
-			}
-		}).start();
         try {
 			server.setUpNetworking();
 		} catch (Exception e) {
@@ -76,15 +69,24 @@ public class Server extends Observable {
     }
     
     public void setUpNetworking() throws Exception {
+//        if(new File("history.json").isFile()) {
+//        	bids.set(0, gson.fromJson("history.json", ArrayList.class));
+//        }
 		@SuppressWarnings("resource")
 		ServerSocket serverSocket = new ServerSocket(8000);
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				while(true) {
+					refresh();
+				}
+			}
+		}).start();
 		while (true) { 
 			Socket socket = serverSocket.accept();
 			System.out.println("got a connection");
 			ClientHandler handler = new ClientHandler(this, socket);
 			bids.add(new ArrayList<String>());
-			handler.sendItemList();
-			handler.displayItems(items);
 			this.addObserver(handler);
 			new Thread(handler).start();
 			Timer timer = new Timer();
@@ -144,15 +146,50 @@ public class Server extends Observable {
     		client.writer.println(gson.toJson(out));
     		client.writer.flush();
     	}
-    	else if(message.type.equals("username")) {
-    		usernames.add(message.message);
-    	}
-    	else if(message.type.equals("password")) {
-    		passwords.add(message.message);
+    	else if(message.type.equals("credentials")) {
+    		String status = "";
+    		if(usernames.contains(message.username)) {
+    			if(passwords.get(usernames.indexOf(message.username)).equals(message.password)) {
+	    			int client_num = usernames.indexOf(message.username);
+	    			client.name = "Client" + client_num;
+	    			bids.remove(bids.size()-1);
+	    			client_number--;
+	    			status = "success";
+    			}
+    			else {
+    				status = "failed";
+    			}
+    		}
+    		else {
+    			usernames.add(message.username);
+    			passwords.add(message.password);
+    			status = "success";
+    		}
+    		out = new Message("verification", status);
+    		client.writer.println(gson.toJson(out));
+    		client.writer.flush();
+			client.sendItemList();
+			client.displayItems(items);
     	}
     	else if(message.type.equals("refresh")) {
-    		display_history = false;
-    		client.displayItems(items);
+    		Message msg = new Message("update", previous_message, items);
+    		client.writer.println(gson.toJson(msg));
+    		client.writer.flush();
+    	}
+    	else if(message.type.equals("search")) {
+    		output = message.message + " Bids:\n";
+    		for(int i = 0; i < bids.size(); i++) {
+    			for(int j = 0; j < bids.get(i).size(); j++) {
+    				if(bids.get(i).get(j).contains(message.message)) {
+    					output += "Client" + i + " " + bids.get(i).get(j) + "\n";
+    				}
+    			}
+    			output += "\n";
+        		display_history = true;
+        		out = new Message("notification", output);
+        		client.writer.println(gson.toJson(out));
+        		client.writer.flush();
+    		}
     	}
     	else {
     		client.writer.println(gson.toJson(out));
@@ -165,9 +202,11 @@ public class Server extends Observable {
     		if(System.currentTimeMillis() - time >= 1000) {
     			time = System.currentTimeMillis();
     			for(Item i : items) {
-    				i.setRemainingTime(i.getRemainingTime()-1);
+    				if(i.getRemainingTime() > 0) {
+    					i.setRemainingTime(i.getRemainingTime()-1);
+    				}
     			}
-    			if(!display_history) {
+    			if(!display_history && !over) {
 	    			Message msg = new Message("update", previous_message, items);
 	        		this.setChanged();
 	        		this.notifyObservers(gson.toJson(msg));
@@ -177,7 +216,7 @@ public class Server extends Observable {
     }
     
     public void endAuction() {
-    	String output = "update\nThe auction has ended. Winners are listed below:\n";
+    	String output = "The auction has ended. Winners are listed below:\n";
     	for(Item i : items) {
     		if(last_bidder.get(items.indexOf(i)) == null) {
     			output += i.getName() + ": there were no bids for this item\n";
@@ -195,6 +234,22 @@ public class Server extends Observable {
     		e.printStackTrace();
     	}
     	over = true;
+        try {
+            File f = new File("history.json");
+            if (f.createNewFile()) {
+              System.out.println("File created: " + f.getName());
+            } else {
+              System.out.println("File already exists.");
+            }
+            FileWriter writer = new FileWriter("history.json");
+            for(ArrayList<String> s : bids) {
+            	gson.toJson(s, writer);
+            }
+            writer.close();
+         } 
+        catch (IOException e) {
+        	  e.printStackTrace();
+         }
     }
     
 	class ClientHandler implements Runnable, Observer {
@@ -243,17 +298,13 @@ public class Server extends Observable {
 			try {
 				while((message = reader.readLine()) != null) {
 					synchronized(lock) {
-						if(!over) {
-//							System.out.println("read " + message);
-							Message msg = gson.fromJson(message, Message.class);
-							server.processRequest(this, msg);
-						}
-						else {
-							server.processRequest(this, null);
-						}
+						//	System.out.println("read " + message);
+						Message msg = gson.fromJson(message, Message.class);
+						server.processRequest(this, msg);
 					}
 				}
-			} catch (IOException e) {
+			}
+			catch (IOException e) {
 				e.printStackTrace();
 			}
 		}

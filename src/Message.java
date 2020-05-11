@@ -6,6 +6,8 @@ public class Message {
 	String bid_item;
 	int amount;
 	ArrayList<Item> items;
+	String username;
+	String password;
 	
 	public Message(String type, String message, ArrayList<Item> items) {
 		this.type = type;
@@ -22,6 +24,12 @@ public class Message {
 	public Message(String type, String message) {
 		this.type = type;
 		this.message = message;
+	}
+	
+	public Message(String type, String username, String password) {
+		this.type = type;
+		this.username = username;
+		this.password = password;
 	}
 	
 	public Message() {

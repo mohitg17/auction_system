@@ -7,6 +7,7 @@
  * Spring 2020
  */
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -29,34 +30,42 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
 public class Client extends Application { 
 	// I/O streams 
-	private TextArea incoming;
+	private TextArea incoming = new TextArea();
 	private TextField outgoing;
 	private TextField username;
 	private TextField password;
 	private BufferedReader reader;
 	private PrintWriter writer;
-	private Button submit;
+	private Button submit = new Button("Submit");
 	private Button send;
 	private Button history;
 	private Button view;
+	private Button search;
 	private Button quit;
-	private ComboBox dropdown;
+	private ComboBox dropdown = new ComboBox();
+	private boolean login = false;
 	GsonBuilder builder = new GsonBuilder();
 	Gson gson = builder.create();
 		
 	@Override
 	public void start(Stage primaryStage) {
+		try {
+			setUpNetworking();
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+		
 		Text text1 = new Text("Username");   
 		Text text2 = new Text("Password"); 
 		username = new TextField();         
 		password = new TextField();  
-
-		Button submit = new Button("Submit");
 
 		GridPane gridpane = new GridPane();  
 		gridpane.setMinSize(400, 200);
@@ -77,131 +86,139 @@ public class Client extends Application {
 		primaryStage.show(); // Display the stage
 		
 		submit.setOnAction(d -> {
-			String usr = username.getText();
-			String pw = password.getText();
-			Stage stage = (Stage) submit.getScene().getWindow();
-		    stage.close();
+		    if(!username.getText().equals("")) {
+				Message msg = new Message("credentials", username.getText(), password.getText());
+			    writer.println(gson.toJson(msg));
+			    writer.flush();
+			    try {
+					Thread.sleep(250);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+		    }
 		    
-			// outgoing
-			BorderPane paneForTextField = new BorderPane(); 
-			paneForTextField.setPadding(new Insets(10, 10, 10, 10)); 
-			paneForTextField.setStyle("-fx-border-color: green"); 
-			paneForTextField.setLeft(new Label("Enter a bid: ")); 
-			outgoing = new TextField();
-//			outgoing.setAlignment(Pos.CENTER_RIGHT);
-			outgoing.setAlignment(Pos.CENTER);
-			paneForTextField.setCenter(outgoing);
-
-			// control panel
-			GridPane paneForControls = new GridPane();
-		    ColumnConstraints column1 = new ColumnConstraints();
-		    column1.setPercentWidth(20);
-		    ColumnConstraints column2 = new ColumnConstraints();
-		    column2.setPercentWidth(20);
-		    ColumnConstraints column3 = new ColumnConstraints();
-		    column3.setPercentWidth(20);
-		    ColumnConstraints column4 = new ColumnConstraints();
-		    column4.setPercentWidth(20);
-		    ColumnConstraints column5 = new ColumnConstraints();
-		    column5.setPercentWidth(20);
-		    paneForControls.getColumnConstraints().addAll(column1, column2, column3, column4, column5);
-			paneForControls.setMinSize(600, 50);
-			paneForControls.setPadding(new Insets(10, 10, 10, 10));
-			paneForControls.setVgap(5); 
-			paneForControls.setHgap(5);
-			paneForControls.setAlignment(Pos.CENTER);
-			
-			// incoming
-			BorderPane mainPane = new BorderPane();
-			incoming = new TextArea(); 
-			incoming.setPrefSize(700, 700);
-			mainPane.setCenter(new ScrollPane(incoming)); 
-			mainPane.setTop(paneForControls);
-			
-			// items list and text field
-			dropdown = new ComboBox();
-			paneForControls.add(dropdown, 0, 0);
-			paneForControls.add(outgoing, 1, 0);
-			GridPane.setHalignment(dropdown, HPos.CENTER);
-			GridPane.setHalignment(outgoing, HPos.CENTER);
-			
-			//buttons
-			send = new Button("Send");
-			send.setAlignment(Pos.CENTER);
-			send.setMinWidth(75);
-			paneForControls.add(send, 2, 0);
-			history = new Button("History");
-			history.setMinWidth(75);
-			history.setAlignment(Pos.CENTER);
-			paneForControls.add(history, 3, 0);
-			view = new Button("View");
-			send.setAlignment(Pos.CENTER);
-			send.setMinWidth(50);
-			paneForControls.add(view, 4, 0);
-			GridPane.setHalignment(send, HPos.CENTER);
-			GridPane.setHalignment(history, HPos.CENTER);
-			GridPane.setHalignment(view, HPos.CENTER);
-			
-			// quit button
-			quit = new Button("Quit");
-			quit.setMinSize(50, 25);
-			quit.setAlignment(Pos.CENTER);
-			mainPane.setBottom(quit);
-			mainPane.setAlignment(quit, Pos.CENTER);
-			
-			Stage secondStage = new Stage();
-			Scene scene2 = new Scene(mainPane, 700, 700); 
-			secondStage.setTitle("Client"); // Set the stage title 
-			secondStage.setScene(scene2); // Place the scene in the stage 
-			secondStage.show(); // Display the stage 
-
-			outgoing.setOnAction(e -> {
-				send.fire();
-			});
-			
-			send.setOnAction(r -> {
-				if(!(dropdown.getValue() == null)) {
-					Message message = new Message("bid", (String)dropdown.getValue(), Integer.parseInt(outgoing.getText()));
+		    if(login) {
+		    	Stage stage = (Stage) submit.getScene().getWindow();
+		    	stage.close();
+		    
+				// outgoing
+				BorderPane paneForTextField = new BorderPane(); 
+				paneForTextField.setPadding(new Insets(10, 10, 10, 10)); 
+				paneForTextField.setStyle("-fx-border-color: green"); 
+				paneForTextField.setLeft(new Label("Enter a bid: ")); 
+				outgoing = new TextField();
+				outgoing.setAlignment(Pos.CENTER);
+				paneForTextField.setCenter(outgoing);
+	
+				// control panel
+				GridPane paneForControls = new GridPane();
+			    ColumnConstraints column1 = new ColumnConstraints();
+			    column1.setPercentWidth(20);
+			    ColumnConstraints column2 = new ColumnConstraints();
+			    column2.setPercentWidth(20);
+			    ColumnConstraints column3 = new ColumnConstraints();
+			    column3.setPercentWidth(15);
+			    ColumnConstraints column4 = new ColumnConstraints();
+			    column4.setPercentWidth(15);
+			    ColumnConstraints column5 = new ColumnConstraints();
+			    column5.setPercentWidth(15);
+			    ColumnConstraints column6 = new ColumnConstraints();
+			    column5.setPercentWidth(15);
+			    paneForControls.getColumnConstraints().addAll(column1, column2, column3, column4, column5, column6);
+				paneForControls.setMinSize(600, 50);
+				paneForControls.setPadding(new Insets(10, 10, 10, 10));
+				paneForControls.setVgap(5); 
+				paneForControls.setHgap(5);
+				paneForControls.setAlignment(Pos.CENTER);
+				
+				// incoming
+				BorderPane mainPane = new BorderPane();
+				incoming.setPrefSize(700, 700);
+				mainPane.setCenter(new ScrollPane(incoming)); 
+				mainPane.setTop(paneForControls);
+				
+				// items list and text field
+				paneForControls.add(dropdown, 0, 0);
+				paneForControls.add(outgoing, 1, 0);
+				GridPane.setHalignment(dropdown, HPos.CENTER);
+				GridPane.setHalignment(outgoing, HPos.CENTER);
+				
+				//buttons
+				send = new Button("Send");
+				send.setAlignment(Pos.CENTER);
+				send.setMinWidth(75);
+				paneForControls.add(send, 2, 0);
+				history = new Button("History");
+				history.setMinWidth(75);
+				history.setAlignment(Pos.CENTER);
+				paneForControls.add(history, 4, 0);
+				view = new Button("View");
+				send.setAlignment(Pos.CENTER);
+				send.setMinWidth(50);
+				paneForControls.add(view, 5, 0);
+				search = new Button("Search");
+				search.setAlignment(Pos.CENTER);
+				search.setMinWidth(50);
+				paneForControls.add(search,  3, 0);
+				GridPane.setHalignment(send, HPos.CENTER);
+				GridPane.setHalignment(history, HPos.CENTER);
+				GridPane.setHalignment(view, HPos.CENTER);
+				GridPane.setHalignment(search, HPos.CENTER);
+				
+				// quit button
+				quit = new Button("Quit");
+				quit.setMinSize(50, 25);
+				quit.setAlignment(Pos.CENTER);
+				mainPane.setBottom(quit);
+				mainPane.setAlignment(quit, Pos.CENTER);
+				
+				Stage secondStage = new Stage();
+				Scene scene2 = new Scene(mainPane, 700, 700); 
+				secondStage.setTitle("Client"); // Set the stage title 
+				secondStage.setScene(scene2); // Place the scene in the stage 
+				secondStage.show(); // Display the stage 
+	
+				outgoing.setOnAction(e -> {
+					send.fire();
+				});
+				
+				send.setOnAction(r -> {
+					if(!(dropdown.getValue() == null)) {
+						Message message = new Message("bid", (String)dropdown.getValue(), Integer.parseInt(outgoing.getText()));
+						writer.println(gson.toJson(message));
+						writer.flush();
+						outgoing.setText("");
+						outgoing.requestFocus();
+					}
+					else {
+						Message message = new Message("refresh", "");
+						writer.println(gson.toJson(message));
+						writer.flush();
+					}
+				});
+				
+				history.setOnAction(z -> {
+					Message message = new Message("history", "");
 					writer.println(gson.toJson(message));
 					writer.flush();
-					outgoing.setText("");
-					outgoing.requestFocus();
-				}
-				else {
+				});
+				
+				view.setOnAction( p -> {
 					Message message = new Message("refresh", "");
 					writer.println(gson.toJson(message));
 					writer.flush();
-				}
-			});
-			
-			history.setOnAction(z -> {
-				Message message = new Message("history", "");
-				writer.println(gson.toJson(message));
-				writer.flush();
-			});
-			
-			view.setOnAction( p -> {
-				Message message = new Message("refresh", "");
-				writer.println(gson.toJson(message));
-				writer.flush();
-			});
-			
-			quit.setOnAction(f -> {
-				secondStage.close();
-			});
-
-			try {
-				setUpNetworking();
-			} catch (Exception e1) {
-				e1.printStackTrace();
-			}
-			
-		    Message msg = new Message("username", usr);
-		    writer.println(gson.toJson(msg));
-		    writer.flush();
-		    msg = new Message("password", pw);
-		    writer.println(gson.toJson(msg));
-		    writer.flush();
+				});
+				
+				search.setOnAction(w -> {
+					Message message = new Message("search", (String)dropdown.getValue());
+					writer.println(gson.toJson(message));
+					writer.flush();
+				});
+				
+				quit.setOnAction(f -> {
+					secondStage.close();
+				});
+		    }
 		});
 	}
 	
@@ -235,14 +252,26 @@ public class Client extends Application {
 			break;
 		case "notification":
 			tmp = msg.message;
+			break;
+		case "verification":
+			if(msg.message.equals("success")) {
+				login = true;
+			}
 		}
-		if(!msg.type.equals("items")) {
+		if(!msg.type.equals("items") && !msg.type.equals("verification")) {
 			String out = tmp;
 			Platform.runLater(() -> {
 				incoming.clear();
 				incoming.appendText(out + "\n");
 			});
 		}
+	}
+	
+	private void click() {
+		String music = System.getProperty("user.dir") + "/src/click.m4a";
+		Media sound = new Media(new File(music).toURI().toString());
+		MediaPlayer mediaPlayer = new MediaPlayer(sound);
+		mediaPlayer.setAutoPlay(true);;
 	}
 	
 	class Reader implements Runnable {
