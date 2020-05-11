@@ -29,6 +29,8 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
@@ -173,8 +175,8 @@ public class Client extends Application {
 				Scene scene2 = new Scene(mainPane, 700, 700); 
 				secondStage.setTitle("Client"); // Set the stage title 
 				secondStage.setScene(scene2); // Place the scene in the stage 
-				secondStage.show(); // Display the stage 
-	
+				secondStage.show(); // Display the stage   
+		        
 				outgoing.setOnAction(e -> {
 					send.fire();
 				});
@@ -192,28 +194,33 @@ public class Client extends Application {
 						writer.println(gson.toJson(message));
 						writer.flush();
 					}
+					click();
 				});
 				
 				history.setOnAction(z -> {
 					Message message = new Message("history", "");
 					writer.println(gson.toJson(message));
 					writer.flush();
+					click();
 				});
 				
 				view.setOnAction( p -> {
 					Message message = new Message("refresh", "");
 					writer.println(gson.toJson(message));
 					writer.flush();
+					click();
 				});
 				
 				search.setOnAction(w -> {
 					Message message = new Message("search", (String)dropdown.getValue());
 					writer.println(gson.toJson(message));
 					writer.flush();
+					click();
 				});
 				
 				quit.setOnAction(f -> {
 					secondStage.close();
+					click();
 				});
 		    }
 		});
@@ -262,6 +269,12 @@ public class Client extends Application {
 				incoming.appendText(out + "\n");
 			});
 		}
+	}
+	
+	private void click() {
+        Media media = new Media(new File("click.m4a").toURI().toString());  
+        MediaPlayer mediaPlayer = new MediaPlayer(media);  
+        mediaPlayer.play();
 	}
 	
 	class Reader implements Runnable {
